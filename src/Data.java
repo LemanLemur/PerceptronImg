@@ -1,17 +1,19 @@
+import java.awt.image.BufferedImage;
+
 class Data {
     private int[] d;
-    private int label;
+    private BufferedImage img;
 
-    Data(int[] d, int label) {
+    Data(int[] d, BufferedImage img) {
         this.d = d;
-        this.label = label;
+        this.img = img;
     }
 
     int[] getD() {
         return d;
     }
 
-    public int getLabel() {
-        return label;
+    public BufferedImage getLabel() {
+        return img;
     }
 }

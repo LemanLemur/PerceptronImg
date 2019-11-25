@@ -1,174 +1,360 @@
+import javax.imageio.ImageIO;
 import javax.swing.*;
-import javax.swing.border.Border;
-import javax.swing.border.CompoundBorder;
-import javax.swing.border.EmptyBorder;
-import javax.swing.border.LineBorder;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.io.BufferedReader;
+import java.awt.event.*;
+import java.awt.image.BufferedImage;
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
 
 public class Main {
 
-    static Perceptron[] perceprtons = new Perceptron[11];
-    static JLabel score = new JLabel("Wynik: ");
-    static JLabel inLearning = new JLabel("Uczę Się\n");
-    static JLabel errorNumber = new JLabel("Procent błędów: ");
-    static private int[] buttonInput = new int[36];
-    static Data[] data;
-    static int rn = 10000;
-    static int en = 0;
+    static Perceptron[] perceprtons = new Perceptron[2500];
+    static private int[] imgInput = new int[2501];
+    static private int[] imgOutput = new int[2501];
+    static private Point[] imgXY = new Point[2501];
+    static int picturesCount = 7;
+    static int counter = 0;
+    static Data[] dataSet;
+    private static OutputPanel mousePanel1 = new OutputPanel();
+    private static MousePanel mousePanel = new MousePanel();
 
-    public static void main(String[] args) {
-        try {
-            data = prepareDataset();
-        } catch (IOException e) {
-            e.printStackTrace();
+    static int learnTimes = 1000;
+    static int reqTimes = 500;
+
+    public static void main(String[] args) throws IOException {
+        imgXYinArray();
+        mousePanel.firstPaint();
+        mousePanel1.paint();
+        dataSet = prepareDataset();
+        for (int i = 0; i < perceprtons.length; i++) {
+            perceprtons[i] = new Perceptron();
         }
-        for (int i = 0; i < 32; i++) {
-            buttonInput[i] = 0;
+        for (int i = 0; i < 2501; i++) {
+            imgInput[i] = 0;
+            imgOutput[i] = 0;
         }
-        try {
-            learn();
-        } catch (CloneNotSupportedException e) {
-            e.printStackTrace();
-        }
+        imgInput[0] = 1;
+        imgOutput[0] = 1;
+        learn();
         createWindow();
     }
 
-    static void learn() throws CloneNotSupportedException {
+    private static void imgXYinArray() {
+        for (int j = 0; j < 50; j++) {
+            for (int k = 0; k < 50; k++) {
+                int position = 1 + j + k * 50;
+                imgXY[position] = new Point(k, j);
+            }
+        }
+    }
+
+    static void learn() {
         int life, lastLife;
         Random random = new Random();
         for (int i = 0; i < perceprtons.length; i++) {
             life = 0;
             lastLife = 0;
-            Perceptron pocket = perceprtons[i];
-            for (int j = 0; j < 1000; j++) {
-                Data d = data[random.nextInt(data.length)];
-                int O = perceprtons[i].guess(d.getD());
-                int T;
-                if (i == d.getLabel()) {
-                    T = 1;
+            Perceptron pocket = new Perceptron(perceprtons[i].weights);
+            for (int j = 0; j < learnTimes; j++) {
+                Data data = dataSet[random.nextInt(dataSet.length)];
+                int[] d = data.getD();
+                int O = perceprtons[i].guess(d, 1);
+
+                int err;
+                if (d[i + 1] == 0) {
+                    err = -1 - O;
                 } else {
-                    T = -1;
+                    err = 1 - O;
                 }
-                int err = T - O;
 
                 if (err != 0) {
+                    perceprtons[i].train(data.getD(), err);
+                    lastLife = life;
                     life = 0;
-                    en++;
-                    perceprtons[i].train(d.getD(), err);
                 } else {
                     life++;
                     if (lastLife < life) {
-                        pocket = perceprtons[i];
+                        pocket = new Perceptron(perceprtons[i].weights);
                     }
                 }
             }
-            perceprtons[i] = pocket;
+            perceprtons[i] = new Perceptron(pocket.weights);
         }
-        inLearning.setText("Nauczony!\n");
-        float errorPercent = (float)en / (float)rn * (float)perceprtons.length;
-        errorNumber.setText("Procent błędów: " + errorPercent + "%");
+
+    }
+
+    private static Data[] prepareDataset() throws IOException {
+        Data[] dataSet = new Data[picturesCount];
+        for (int i = 1; i <= picturesCount; i++) {
+            BufferedImage img = ImageIO.read(new File("C:\\Users\\Lemur\\IdeaProjects\\Perceptron\\src\\dataFiles\\" + i + ".png"));
+            int[] d = new int[2501];
+            d[0] = 1;
+
+            for (int j = 0; j < 50; j++) {
+                for (int k = 0; k < 50; k++) {
+                    int position = 1 + j + k * 50;
+                    if (new Color(img.getRGB(k, j)).equals(Color.BLACK))
+                        d[position] = 1;
+                    else
+                        d[position] = 0;
+                }
+            }
+            dataSet[i - 1] = new Data(d, img);
+        }
+        return dataSet;
     }
 
     static void output() {
-        String s = "Wynik: ";
+        int odp = 0;
         for (int i = 0; i < perceprtons.length; i++) {
-            if (perceprtons[i].guess(buttonInput) == 1) {
-                if(i == 10){
-                    s += "a, ";
-                }else{
-                    s += i + ", ";
-                }
-
+            if (perceprtons[i].guess(imgInput, 0) == 1) {
+                odp = 1;
+            } else {
+                odp = 0;
             }
+            imgOutput[i + 1] = odp;
         }
-        score.setText(s);
+        mousePanel1.paint();
     }
 
-
-    private static Data[] prepareDataset() throws IOException {
-        List<Data> dataSet = new ArrayList<>();
-
-        for (int i = 0; i < perceprtons.length; i++) {
-            File file = new File("C:\\Users\\Lemur\\IdeaProjects\\Perceptron\\src\\dataFiles\\" + i + ".txt");
-            BufferedReader br = new BufferedReader(new FileReader(file));
-            String st;
-            while ((st = br.readLine()) != null) {
-                int[] data = new int[buttonInput.length];
-                data[0] = 1;
-                int l = 1;
-                for (int j = 0; j < st.length(); j++) {
-                    char c = st.charAt(j);
-                    if (c == '1' || c == '0') {
-                        data[l] = c - '0';
-                        l++;
-                    }
+    static void outputReq() {
+        int odp = 0;
+        for (int j = 0; j < reqTimes; j++) {
+            for (int i = 0; i < perceprtons.length; i++) {
+                if (perceprtons[i].guess(imgOutput.clone(), 0) == 1) {
+                    odp = 1;
+                } else {
+                    odp = 0;
                 }
-                dataSet.add(new Data(data, i));
+                imgOutput[i + 1] = odp;
             }
-
-            perceprtons[i] = new Perceptron();
         }
-
-        return dataSet.toArray(new Data[0]);
+        mousePanel1.paint();
     }
 
     private static void createWindow() {
         JFrame jFrame = new JFrame("Programowanko");
+
         jFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         jFrame.setLayout(new CardLayout());
         jFrame.setMinimumSize(new Dimension(500, 500));
+        jFrame.setLayout(new GridLayout(2, 4));
 
-        JPanel jPanel = new JPanel();
-        jPanel.add(inLearning);
+        JPanel empty1 = new JPanel();
+        JPanel empty2 = new JPanel();
 
-        JPanel grid = new JPanel();
-        grid.setSize(new Dimension(500, 700));
-        grid.setLayout(new GridLayout(7, 5));
+        JButton back = new JButton("Reset");
+        back.setMaximumSize(new Dimension(100, 50));
+        back.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                for (int i = 0; i < 2501; i++) {
+                    imgInput[i] = 0;
+                }
+                mousePanel.firstPaint();
+            }
+        });
+        JButton next = new JButton("-->");
+        next.setSize(new Dimension(100, 50));
+        next.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                counter++;
+                if (counter > picturesCount - 1) counter -= picturesCount;
+                imgInput = dataSet[counter].getD().clone();
+                mousePanel.imgPaint();
+                output();
+            }
+        });
+        JButton req = new JButton("rekurencyjnie");
+        req.setSize(new Dimension(100, 50));
+        req.addActionListener(new ActionListener() {
 
-        JPanel ans = new JPanel();
-        ans.setMinimumSize(new Dimension(200, 200));
-        ans.setLayout(new GridLayout(2, 1));
-//        ans.add(errorNumber);
-        ans.add(score);
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                outputReq();
+            }
+        });
+        JButton out = new JButton("Out");
+        out.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                output();
+            }
+        });
 
-        buttonInput[0] = 1;
-        for (int i = 1; i < buttonInput.length; i++) {
-            JButton button = new JButton();
-            int buttonNum = i;
-            button.addActionListener(ActionEvent -> {
-                if (button.getBackground() == Color.GREEN) {
-                    button.setBackground(Color.RED);
-                    buttonInput[buttonNum] = 0;
-                    output();
-                } else {
-                    button.setBackground(Color.GREEN);
-                    buttonInput[buttonNum] = 1;
+        jFrame.add(mousePanel);
+        jFrame.add(empty2);
+        jFrame.add(empty1);
+        jFrame.add(mousePanel1);
+        jFrame.add(back);
+        jFrame.add(next);
+        jFrame.add(req);
+        jFrame.add(out);
+        jFrame.setVisible(true);
+    }
+
+    /////////////////////////////////////////////////MOUSE PANEL//////////////////////////////////////////////////////////////////////////
+
+    public static class MousePanel extends JPanel {
+
+        private static final int WIDTH = 50;
+        private static final int HEIGHT = 50;
+
+        private int x, y;
+        BufferedImage bufferedImage = new BufferedImage(50, 50, BufferedImage.TYPE_INT_RGB);
+
+        ArrayList<Point> points = new ArrayList<Point>();
+        boolean isLeftButton = false;
+
+        public MousePanel() {
+            setPreferredSize(new Dimension(WIDTH, HEIGHT));
+            setSize(new Dimension(WIDTH, HEIGHT));
+
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mousePressed(MouseEvent e) {
+                    super.mousePressed(e);
+                    if (e.getButton() == MouseEvent.BUTTON1) {
+                        isLeftButton = true;
+                    } else {
+                        isLeftButton = false;
+                    }
+                }
+            });
+            addMouseMotionListener(new MouseMotionAdapter() {
+                @Override
+                public void mouseDragged(MouseEvent e) {
+                    super.mouseDragged(e);
+                    if (isLeftButton && e.getX() <= 50 && e.getY() <= 50) {
+                        paint(e.getPoint());
+
+                        paint(new Point(e.getX() - 1, e.getY()));
+                        paint(new Point(e.getX() + 1, e.getY()));
+                        paint(new Point(e.getX(), e.getY() + 1));
+                        paint(new Point(e.getX() - 1, e.getY() + 1));
+                        paint(new Point(e.getX() + 1, e.getY() + 1));
+                        paint(new Point(e.getX(), e.getY() - 1));
+                        paint(new Point(e.getX() - 1, e.getY() - 1));
+                        paint(new Point(e.getX() + 1, e.getY() - 1));
+
+                    }
+                    if (!isLeftButton && e.getX() <= 50 && e.getY() <= 50) {
+                        removePaint(e.getPoint());
+
+                        removePaint(new Point(e.getX() - 1, e.getY()));
+                        removePaint(new Point(e.getX() + 1, e.getY()));
+                        removePaint(new Point(e.getX(), e.getY() + 1));
+                        removePaint(new Point(e.getX() - 1, e.getY() + 1));
+                        removePaint(new Point(e.getX() + 1, e.getY() + 1));
+                        removePaint(new Point(e.getX(), e.getY() - 1));
+                        removePaint(new Point(e.getX() - 1, e.getY() - 1));
+                        removePaint(new Point(e.getX() + 1, e.getY() - 1));
+                    }
                     output();
                 }
             });
-
-            button.setBackground(Color.RED);
-            button.setMinimumSize(new Dimension(100, 100));
-            Border line = new LineBorder(Color.BLACK);
-            Border margin = new EmptyBorder(25, 25, 25, 25);
-            Border compound = new CompoundBorder(line, margin);
-            button.setBorder(compound);
-            grid.add(button);
         }
 
-        jPanel.add(grid);
-        jPanel.add(ans);
-        jFrame.add(jPanel);
-        jFrame.setVisible(true);
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            g.drawImage(bufferedImage, 0, 0, 50, 50, this);
+        }
+
+        private void paint(Point p) {
+            if (p.x < 50 && p.x >= 0 && p.y < 50 && p.y >= 0) {
+                bufferedImage.setRGB(p.x, p.y, Color.BLACK.getRGB());
+                imgInput[1 + p.y + p.x * 50] = 1;
+            }
+            this.repaint();
+        }
+
+        private void firstPaint() {
+            for (int i = 1; i < imgInput.length; i++) {
+                if (imgInput[i] == 1) {
+                    bufferedImage.setRGB(imgXY[i].x, imgXY[i].y, Color.BLACK.getRGB());
+                } else {
+                    bufferedImage.setRGB(imgXY[i].x, imgXY[i].y, Color.WHITE.getRGB());
+                }
+            }
+            this.repaint();
+        }
+
+        private void imgPaint() {
+            for (int i = 1; i < imgInput.length; i++) {
+                if (imgInput[i] == 1) {
+                    bufferedImage.setRGB(imgXY[i].x, imgXY[i].y, Color.BLACK.getRGB());
+                } else {
+                    bufferedImage.setRGB(imgXY[i].x, imgXY[i].y, Color.WHITE.getRGB());
+                }
+            }
+            this.repaint();
+        }
+
+        private void removePaint(Point p) {
+            if (p.x < 50 && p.x >= 0 && p.y < 50 && p.y >= 0) {
+                bufferedImage.setRGB(p.x, p.y, Color.WHITE.getRGB());
+                imgInput[1 + p.y + p.x * 50] = 0;
+            }
+            this.repaint();
+        }
+
+        private void drawRectangles(Graphics2D g2d) {
+            int x, y;
+            for (Point p : points) {
+                x = (int) p.getX();
+                y = (int) p.getY();
+                g2d.fillRect(x, y, 1, 1);
+            }
+        }
+
+    }
+
+    public static class OutputPanel extends JPanel {
+
+        private static final int WIDTH = 50;
+        private static final int HEIGHT = 50;
+
+        private int x, y;
+        BufferedImage bufferedImage = new BufferedImage(50, 50, BufferedImage.TYPE_INT_RGB);
+
+        ArrayList<Point> points = new ArrayList<Point>();
+        boolean isLeftButton = false;
+
+        public OutputPanel() {
+            setPreferredSize(new Dimension(WIDTH, HEIGHT));
+            setSize(new Dimension(WIDTH, HEIGHT));
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            g.drawImage(bufferedImage, 0, 0, 50, 50, this);
+        }
+
+        private void paint() {
+            for (int i = 1; i < imgOutput.length; i++) {
+                if (imgOutput[i] == 1) {
+                    bufferedImage.setRGB(imgXY[i].x, imgXY[i].y, Color.BLACK.getRGB());
+                } else {
+                    bufferedImage.setRGB(imgXY[i].x, imgXY[i].y, Color.WHITE.getRGB());
+                }
+            }
+            this.repaint();
+        }
+
+        private void drawRectangles(Graphics2D g2d) {
+            int x, y;
+            for (Point p : points) {
+                x = (int) p.getX();
+                y = (int) p.getY();
+                g2d.fillRect(x, y, 1, 1);
+            }
+        }
+
     }
 
 }
